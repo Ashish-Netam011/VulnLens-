@@ -8,6 +8,7 @@ import projectRoutes from './routes/projects.js';
 import scanRoutes from './routes/scans.js';
 import reportRoutes from './routes/reports.js';
 import dashboardRoutes from './routes/dashboard.js';
+import aiRoutes from './routes/ai.js';
 import { createRateLimiter } from './middleware/rateLimit.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
@@ -65,6 +66,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/scans', scanRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/ai', aiRoutes);
 
 // 404 + centralized error handling.
 app.use(notFound);

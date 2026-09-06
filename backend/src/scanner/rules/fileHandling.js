@@ -3,6 +3,8 @@
  * Unvalidated file paths, missing auth checks, upload issues.
  */
 
+import { analyzeTaint, sinkArgTaint, nodeText } from '../ast.js';
+
 const FILES = [
   {
     id: 'file-write-user',
@@ -45,6 +47,82 @@ const FILES = [
   },
 ];
 
+// ── Request-tainted path arguments (Phase 7) ────────────────────────────────
+// The regex rules above can only see an inline `req./params./query.` token inside
+// the call. They miss request-derived paths that arrive via variable aliases and
+// the *Sync / stream variants (readFileSync, writeFileSync, appendFileSync,
+// createReadStream). This pass reuses the deterministic intra-function taint
+// analysis and only emits a finding when the PATH argument (arg 0) is
+// request-tainted, so constant or unrelated paths never trigger.
+
+const READ_PATH_METHODS = new Set(['readFile', 'readFileSync']);
+const WRITE_PATH_METHODS = new Set(['writeFile', 'writeFileSync', 'appendFile', 'appendFileSync']);
+const INLINE_REQUEST_TOKEN = /(?:req\.|params\.|query\.|body\.)/;
+
+function fsPathMethodName(call) {
+  if (!call || !call.callee || call.callee.type !== 'MemberExpression') return '';
+  const prop = call.callee.property;
+  if (prop && prop.type === 'Identifier') return prop.name;
+  if (prop && prop.type === 'Literal') return String(prop.value);
+  return '';
+}
+
+/**
+ * Detect fs read/write calls whose path argument is request-derived through an
+ * alias chain (p, filePath, dest, ...) that the regex rules cannot see.
+ * Skips calls already reported by the inline-request regex on the same line so
+ * findings are never duplicated.
+ */
+export function findRequestPathFlows(code, existingFindings) {
+  // Cheap prefilter: an fs path call and a request source on the same file.
+  if (!/readFile(?:Sync)?\s*\(|writeFile(?:Sync)?\s*\(|appendFile(?:Sync)?\s*\(/.test(code)) return [];
+  if (!/(?:req\.|body\.|query\.|params\.|headers\.|cookies\.)/.test(code)) return [];
+
+  const analysis = analyzeTaint(code, 'file');
+  const existingKeys = new Set();
+  for (const f of existingFindings || []) existingKeys.add(f.ruleId + ':' + f.line);
+  const out = [];
+
+  for (const sink of analysis.sinks || []) {
+    if (sink.type !== 'fs' || !sink.node || sink.node.type !== 'CallExpression') continue;
+    const node = sink.node;
+    const method = fsPathMethodName(node);
+    const readPat = READ_PATH_METHODS.has(method);
+    const writePat = WRITE_PATH_METHODS.has(method);
+    if (!readPat && !writePat) continue;
+
+    const arg0 = node.arguments && node.arguments[0];
+    if (!arg0) continue;
+    const argText = nodeText(arg0, code);
+    // Inline request member expression → already covered by the regex rules.
+    if (INLINE_REQUEST_TOKEN.test(argText)) continue;
+    if (arg0.type === 'Literal' || arg0.type === 'TemplateLiteral') continue;
+
+    const t = sinkArgTaint(sink, analysis.env, code);
+    if (!t || !t.tainted) continue;
+
+    const line = (node.loc && node.loc.start.line) || 1;
+    const rule = readPat
+      ? FILES.find((f) => f.id === 'unchecked-file-read')
+      : FILES.find((f) => f.id === 'file-write-user');
+    if (!rule || existingKeys.has(rule.id + ':' + line)) continue;
+
+    out.push({
+      ruleId: rule.id,
+      vulnerabilityType: 'Insecure File Handling',
+      title: rule.title,
+      severity: rule.severity,
+      confidence: rule.confidence,
+      reason:
+        'A request-derived path value reaches a file operation through an alias or a *Sync/stream variant, which can enable path traversal or unauthorized file access.',
+      line,
+      affectedCode: nodeText(node, code).slice(0, 160),
+      category: 'Insecure File Handling',
+    });
+  }
+  return out;
+}
+
 export default function fileHandlingRule(code) {
   const findings = [];
   for (const pat of FILES) {
@@ -66,5 +144,7 @@ export default function fileHandlingRule(code) {
       });
     }
   }
+  // Phase 7: request-tainted path args via aliases / *Sync / stream variants.
+  findings.push(...findRequestPathFlows(code, findings));
   return findings;
 }

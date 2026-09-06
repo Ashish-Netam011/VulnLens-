@@ -38,6 +38,7 @@ const RULE_AST_CATEGORY = {
   'sql-unprepared': 'sql',
   'nosql-where': 'sql',
   'nosql-operator': 'sql',
+  'nosql-object-query': 'sql',
   // XSS
   innerhtml: 'xss',
   dangerouslySetInnerHTML: 'xss',

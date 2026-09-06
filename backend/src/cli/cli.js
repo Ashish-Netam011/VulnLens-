@@ -17,6 +17,11 @@
  * finding are reported RESOLVED. Baselined findings never mutate severity,
  * confidence, or evidence — only CI gating behavior changes. See
  * docs/baseline-regression-intelligence.md.
+ *
+ * Phase 8 adds an OPT-IN AI Security Copilot (`--explain`): deterministic
+ * findings get structured explanations/remediation from the configured AI
+ * provider. Normal scans stay deterministic, offline, and AI-free; --explain
+ * never changes findings, baseline classification, SARIF, or exit codes.
  */
 
 import fs from 'node:fs';
@@ -25,6 +30,7 @@ import { runScanner } from '../scanner/scanner.js';
 import { calculateScore } from '../scanner/score.js';
 import { buildSarifReport, serializeSarif } from '../services/sarifService.js';
 import { allowedExtension, sanitizeRelativePath } from '../utils/validation.js';
+import { explainFindingWithAI, MAX_EXPLAINED_FINDINGS } from '../ai/copilot.js';
 
 // Constants ----------------------------------------------------------------
 
@@ -59,7 +65,7 @@ export function parseArgs(argv) {
   const result = {
     command: null, target: null, format: 'table', output: null,
     failOn: 'high', quiet: false, version: false, help: false, errors: [],
-    baseline: null,
+    baseline: null, explain: false,
   };
 
   const args = argv.slice(2);
@@ -98,6 +104,7 @@ export function parseArgs(argv) {
     if (arg === '--version' || arg === '-V') { result.version = true; i++; continue; }
     if (arg === '--help' || arg === '-h') { result.help = true; i++; continue; }
     if (arg === '--quiet') { result.quiet = true; i++; continue; }
+    if (arg === '--explain') { result.explain = true; i++; continue; }
 
     if (arg === '--format') {
       i++;
@@ -164,6 +171,9 @@ Options:
                          --fail-on gate unless their severity escalated past
                          the severity recorded in the baseline entry.
                          (default: vulnlens.baseline.json in the working dir)
+  --explain            Explain findings with the AI Security Copilot (opt-in,
+                         requires a configured AI provider; findings, gate,
+                         SARIF, and exit codes are never changed by AI)
   --quiet              Suppress stderr summary
   --version, -V        Print version
   --help, -h           Show this help
@@ -174,6 +184,7 @@ Examples:
   vulnlens scan ./src --format sarif --output vulnlens.sarif
   vulnlens scan ./src --fail-on medium
   vulnlens scan ./src --baseline vulnlens.baseline.json
+  vulnlens scan ./src --explain
 
 Exit codes:
   0  Scan completed; no NEW findings meet failure threshold
@@ -317,6 +328,21 @@ export function formatTable(result, targetLabel) {
     lines.push('');
   }
 
+  // Phase 8: optional AI Copilot summaries (only present with --explain).
+  // Deterministic output and SARIF are unaffected; this section is display-only.
+  const explained = result.findings.filter((f) => f.copilot);
+  if (explained.length > 0) {
+    lines.push('AI Copilot explanations (--explain)');
+    lines.push('------------------------------------------------------------');
+    for (const f of explained) {
+      const c = f.copilot;
+      lines.push(`  ${f.ruleId || 'unknown'}  ${f.filePath || ''}:${f.line || 0}`);
+      if (c.explanation) lines.push(`    Explanation: ${c.explanation}`);
+      if (c.remediation) lines.push(`    Remediation: ${c.remediation}`);
+    }
+    lines.push('');
+  }
+
   // Phase 6D: baseline regression summary (NEW / BASELINED / RESOLVED counts
   // plus the resolved entries, which are never current findings and never
   // affect the gate).
@@ -368,6 +394,14 @@ export function formatJson(result, targetLabel) {
       resolvedEntries: result.baseline.resolvedEntries,
     };
   }
+  // Phase 8: AI Copilot summary is included only when --explain ran.
+  if (result.aiCopilot) {
+    json.aiCopilot = {
+      explained: result.aiCopilot.explained,
+      unavailable: result.aiCopilot.unavailable,
+      source: result.aiCopilot.source,
+    };
+  }
   return JSON.stringify(json, null, 2) + '\n';
 }
 
@@ -388,6 +422,51 @@ export function deriveExitCode(findings, failOn) {
     if (rank !== undefined && rank >= threshold) return 1;
   }
   return 0;
+}
+
+// AI Copilot (Phase 8) ------------------------------------------------------
+
+/**
+ * Explain up to MAX_EXPLAINED_FINDINGS deterministic findings with the AI
+ * Copilot. Highest-severity findings are explained first; RESOLVED baseline
+ * entries are never explained (they are not current findings).
+ *
+ * Bounded source context: each finding's file is re-read from disk and the
+ * Copilot service extracts only a small window around the finding's line —
+ * never the whole file, never the repository.
+ *
+ * AI failure is strictly non-fatal: copilot results are attached as an
+ * additive `copilot` field, and callers must ignore them for gating.
+ */
+export async function runCopilotExplanations(findings) {
+  const candidates = findings
+    .filter((f) => f.baselineStatus !== 'RESOLVED')
+    .slice()
+    .sort((a, b) => (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0))
+    .slice(0, MAX_EXPLAINED_FINDINGS);
+
+  const results = await Promise.all(
+    candidates.map(async (f) => {
+      let code = '';
+      try {
+        const p = path.resolve(process.cwd(), f.filePath || '');
+        if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+          code = fs.readFileSync(p, 'utf8');
+        }
+      } catch {
+        code = ''; // no source context available — the Copilot says so
+      }
+      const r = await explainFindingWithAI(f, { code, fileName: f.filePath });
+      if (r.success) f.copilot = r.copilot; // additive, display-only
+      return r;
+    })
+  );
+
+  return {
+    explained: results.filter((r) => r.success).length,
+    unavailable: results.filter((r) => !r.success).length,
+    source: (results.find((r) => r.success && r.source) || {}).source || null,
+  };
 }
 
 // Baseline Suppression ------------------------------------------------------
@@ -668,6 +747,26 @@ export async function main(argv) {
       escalated: classification.counts.escalated,
       resolvedEntries: classification.resolved,
     };
+  }
+
+  // Phase 8: optional AI Copilot explanations (opt-in via --explain). Runs
+  // AFTER classification but BEFORE formatting so JSON/table output can carry
+  // the additive `copilot` fields. Never touches findings, baseline status,
+  // SARIF, the gate, or the exit code.
+  if (config.explain) {
+    const copilotSummary = await runCopilotExplanations(result.findings);
+    result.aiCopilot = copilotSummary;
+    if (!config.quiet) {
+      if (copilotSummary.explained === 0) {
+        process.stderr.write(
+          'AI Copilot: unavailable (no provider configured) — findings remain deterministic only.\n'
+        );
+      } else {
+        process.stderr.write(
+          `AI Copilot: ${copilotSummary.explained} finding(s) explained via ${copilotSummary.source || 'AI provider'}.\n`
+        );
+      }
+    }
   }
 
   let output;

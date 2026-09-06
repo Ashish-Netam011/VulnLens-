@@ -7,8 +7,12 @@ import env from '../config/env.js';
 
 export const name = 'ollama';
 
-export async function analyze(input, { signal } = {}) {
+export async function analyze(input, { signal, prompts } = {}) {
   const base = env.OLLAMA_BASE_URL.replace(/\/$/, '');
+  // Phase 8: callers may supply dedicated prompts (the AI Security Copilot's
+  // injection-aware prompts). Defaults preserve legacy enrichment behavior.
+  const systemPrompt = (prompts && prompts.system) || buildSystemPrompt();
+  const userPrompt = (prompts && prompts.user) || buildUserPrompt(input);
   const res = await fetch(`${base}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -17,8 +21,8 @@ export async function analyze(input, { signal } = {}) {
       stream: false,
       format: 'json',
       messages: [
-        { role: 'system', content: buildSystemPrompt() },
-        { role: 'user', content: buildUserPrompt(input) },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
       ],
       options: { temperature: 0.2 },
     }),

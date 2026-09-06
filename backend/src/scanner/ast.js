@@ -169,6 +169,46 @@ const QUERY_METHODS = new Set(['query', 'execute', 'raw', 'all', 'get', 'find', 
 const DB_OBJECTS = new Set(['db', 'pool', 'connection', 'client', 'sequelize', 'knex', 'pg', 'mysql', 'mongo']);
 const SQL_KW = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION)\b/i;
 
+// ── Object-query (NoSQL / Mongo-style) sink recognition ─────────────────────
+// Model.find({...user input...}), db.users.find({...}), Model.where({...}), etc.
+// Conservative: the callee must be a capitalized model, a known db/collection
+// object, or a member of a db/mongo/mongoose handle, and the operator must be a
+// document-query op. findById-style id lookups are deliberately excluded (an
+// ObjectId scalar cannot carry MongoDB operator keys).
+
+const OBJ_QUERY_METHODS = new Set([
+  'find', 'findOne', 'where', 'countDocuments', 'distinct',
+  'findOneAndUpdate', 'findOneAndDelete', 'updateOne', 'updateMany',
+  'deleteOne', 'deleteMany',
+]);
+const NOSQL_ROOTS = new Set(['db', 'mongo', 'mongoose', 'connection', 'pool', 'client']);
+
+function objectQueryBaseName(member) {
+  if (!member) return null;
+  if (member.type === 'Identifier') return member.name;
+  if (member.type !== 'MemberExpression') return null;
+  // db.users / mongo.collection style chains: use the last property when the
+  // root object is a known db handle.
+  let root = member;
+  while (root.type === 'MemberExpression') root = root.object;
+  if (root.type !== 'Identifier' || !NOSQL_ROOTS.has(root.name)) return null;
+  return propertyName(member);
+}
+
+export function isNoSqlQuerySink(call) {
+  if (!call || call.type !== 'CallExpression') return false;
+  const callee = call.callee;
+  if (!callee || callee.type !== 'MemberExpression') return false;
+  const prop = propertyName(callee);
+  if (!OBJ_QUERY_METHODS.has(prop)) return false;
+  const base = objectQueryBaseName(callee.object);
+  if (!base) return false;
+  if (NOSQL_ROOTS.has(base) || base === 'Model' || base === 'model' || base === 'collection' || base === 'Collection') return true;
+  if (/^[A-Z]/.test(base)) return true; // capitalized model class
+  if (base.length > 1 && base.endsWith('s') && !base.endsWith('ss')) return true; // plural collection (db.users)
+  return false;
+}
+
 export function isQuerySink(call) {
   if (!call || call.type !== 'CallExpression') return false;
   const callee = call.callee;
@@ -563,7 +603,7 @@ function collectSinks(node, env, sinks, category, code) {
 function matchSinkType(call, category) {
   if (!call || call.type !== 'CallExpression') return null;
   const any = !category;
-  if ((any || category === 'sql') && isQuerySink(call)) return { type: 'sql-query', argIdx: 0 };
+  if ((any || category === 'sql') && (isQuerySink(call) || isNoSqlQuerySink(call))) return { type: 'sql-query', argIdx: 0 };
   if ((any || category === 'xss') && isDomSink(call)) return { type: 'dom', argIdx: 0 };
   if ((any || category === 'command') && isCommandSink(call)) return { type: 'command', argIdx: 0 };
   if ((any || category === 'command') && isEvalSink(call)) return { type: 'eval', argIdx: 0 };

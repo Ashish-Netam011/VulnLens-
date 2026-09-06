@@ -3,6 +3,89 @@
 All notable changes to **VulnLens** are documented here, grouped by phase. The
 project uses a phase-based roadmap (see `README.md` → Phase roadmap).
 
+## Phase 8 — AI Security Copilot (2026-09-06)
+
+Opt-in AI explanations on top of deterministic findings. The deterministic
+scanner remains the source of truth: the Copilot can never create findings,
+suppress findings, or modify severity/confidence/comparisonKey/baseline status
+— it only explains already-detected findings with structured remediation.
+
+### Core service
+- `backend/src/ai/copilot.js` — `explainFindingWithAI()` turns ONE deterministic
+  finding into a validated `{explanation, impact, attackScenario, remediation,
+  secureExample, confidence}` object. Bounded source context (±4 lines, ≤2000
+  chars), compact data-flow summary from finding evidence (Phase 7 flows
+  included), injection-aware dedicated prompts, schema-validated output with
+  safe fallback on any parse/provider failure. Finding objects are never
+  mutated.
+
+### Provider reuse (no new provider abstraction)
+- `backend/src/ai/provider.js` / `openrouter.js` / `ollama.js` accept an
+  optional per-call `prompts` override; default prompts are unchanged, so
+  existing scanService enrichment behavior is byte-identical. No new provider,
+  no new RAG, no new dependencies.
+
+### API
+- `POST /api/ai/explain` (`backend/src/routes/ai.js` + `aiController.js`),
+  auth-protected like all routes, request bounded by the strict
+  `aiExplainSchema` (zod). AI unavailable → `success:false, copilot:null`
+  (HTTP 200) — the scanner never fails because AI is unavailable.
+
+### CLI
+- `vulnlens scan <path> --explain` — opt-in per-finding explanations (≤10
+  findings, highest severity first). Normal scans remain deterministic,
+  offline, and AI-free; `--explain` never changes findings, baseline
+  classification, SARIF, the security gate, or exit codes. AI explanations are
+  additive `copilot` fields in table/JSON output; SARIF stays untouched.
+
+### Tests / docs
+- `backend/tests/copilot.test.js` — 31 tests, all against mocked providers
+  (offline, deterministic): happy path, provider failure, malformed AI output,
+  prompt injection, secret safety, finding integrity, data-flow context,
+  bounded context, API schema, CLI opt-in.
+- `docs/ai-copilot.md` — responsibilities split, providers/config, request/
+  response schema, security guardrails, fallback behavior, limitations.
+
+## Phase 7 — Targeted data-flow analysis (2026-09-06)
+
+Request-source → dangerous-sink detection for the flows the regex rules could
+not express, layered on the existing AST taint engine. No new dependencies, no
+network, deterministic, and purely additive to the verdict model.
+
+### File-access flows
+- `backend/src/scanner/rules/fileHandling.js` now uses the deterministic
+  intra-function taint analysis (`analyzeTaint`/`sinkArgTaint`) to detect
+  request-derived paths reaching `fs.readFile`/`readFileSync` and
+  `writeFile`/`writeFileSync`/`appendFile`/`appendFileSync` through variable
+  aliases and the `*Sync` forms — shapes the inline-request regex rules could
+  not see. Emits the existing `unchecked-file-read` / `file-write-user` rule
+  IDs; constant or unrelated paths never trigger, and calls already covered by
+  the regex are not duplicated.
+
+### NoSQL document-query flows
+- `backend/src/scanner/ast.js` adds conservative object-query sink recognition
+  (`isNoSqlQuerySink`: capitalized models, `db.<collection>` chains, known db
+  roots; document-query ops only — `findById`-style id lookups excluded).
+- `backend/src/scanner/rules/sqlInjection.js` reports the new rule ID
+  `nosql-object-query` (high) when a request-tainted object literal, alias, or
+  whole-request value is passed to a document query.
+- `backend/src/scanner/evidence.js` routes the new rule ID to the `sql` taint
+  category so the existing evidence gate confirms the flow.
+
+### Tests / docs
+- New corpus groups: `nosql-injection` (3 vulnerable / 3 safe fixtures),
+  plus 2 vulnerable and 2 safe `path-traversal` fixtures for the sync/alias
+  shapes — strict gate stays 100% precision/recall, 0 over-claims.
+- `backend/tests/phase7-dataflow.test.js` — 22 tests (source recognition,
+  alias/destructuring propagation, sink recognition, sanitizer/parameterized
+  negatives, constants/unrelated variables, determinism, ruleId stability).
+- `docs/taint-dataflow.md` — capability, source/sink model, sanitizer limits,
+  false-positive philosophy, known limitations, examples.
+- Baseline re-anchor: adding code to `src/scanner/ast.js` shifted two unchanged
+  baselined self-scan self-references by +40 lines (`document-write`
+  202→242, `child-process` 299→339); their entries were updated so the
+  reviewed findings remain BASELINED (no drift, no new accepted findings).
+
 ## Phase 6E — CI & baseline integrity hardening (2026-09-06)
 
 Hardening so the security gate cannot silently weaken via baseline, workflow,

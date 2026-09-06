@@ -7,16 +7,20 @@ import env from '../config/env.js';
 
 export const name = 'openrouter';
 
-export async function analyze(input, { signal } = {}) {
+export async function analyze(input, { signal, prompts } = {}) {
   if (!env.OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
+  // Phase 8: callers may supply dedicated prompts (the AI Security Copilot's
+  // injection-aware prompts). Defaults preserve legacy enrichment behavior.
+  const systemPrompt = (prompts && prompts.system) || buildSystemPrompt();
+  const userPrompt = (prompts && prompts.user) || buildUserPrompt(input);
   const body = {
     model: env.OPENROUTER_MODEL,
     messages: [
-      { role: 'system', content: buildSystemPrompt() },
-      { role: 'user', content: buildUserPrompt(input) },
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
     ],
     temperature: 0.2,
     response_format: { type: 'json_object' },

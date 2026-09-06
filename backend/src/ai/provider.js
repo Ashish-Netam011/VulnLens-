@@ -40,7 +40,14 @@ export async function analyzeWithAI(input, opts = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const results = await provider.analyze(input, { signal: controller.signal });
+      // `prompts` is an optional per-call override (used by the Phase 8 AI
+      // Security Copilot for its dedicated injection-aware prompts). When
+      // absent, each provider uses its default enrichment prompts — existing
+      // scanService behavior is unchanged.
+      const results = await provider.analyze(input, {
+        signal: controller.signal,
+        prompts: opts.prompts,
+      });
       return { ok: true, source: provider.name, results };
     } catch (err) {
       lastError = err;
