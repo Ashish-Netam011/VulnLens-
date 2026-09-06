@@ -5,6 +5,7 @@ import {
   createScan,
   getScan,
   getScanComparison,
+  getScanSource,
   deleteScan,
   uploadScan,
 } from '../controllers/scanController.js';
@@ -30,6 +31,7 @@ router.get('/', listScans);
 router.post('/', validate(scanCreateSchema), createScan);
 router.get('/:id', getScan);
 router.get('/:id/comparison', getScanComparison);
+router.get('/:id/source', getScanSource);
 router.delete('/:id', deleteScan);
 
 export default router;

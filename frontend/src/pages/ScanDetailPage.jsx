@@ -1,154 +1,117 @@
-﻿import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/client.js';
 import { Layout } from '../components/layout/Layout.jsx';
+import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { Card, CardHeader } from '../components/ui/Card.jsx';
 import { Button } from '../components/ui/Button.jsx';
-import { Modal } from '../components/ui/Modal.jsx';
-import { PageLoader } from '../components/ui/Spinner.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
-import { Alert } from '../components/ui/Alert.jsx';
+import { ErrorState } from '../components/ui/ErrorState.jsx';
+import { PageLoader } from '../components/ui/Spinner.jsx';
+import { SeverityBadge } from '../components/ui/SeverityBadge.jsx';
+import { StatusBadge } from '../components/ui/StatusBadge.jsx';
 import { SecurityScore } from '../components/security/SecurityScore.jsx';
-import { SeverityChart } from '../components/security/SeverityChart.jsx';
-import { FindingCard } from '../components/security/FindingCard.jsx';
-import { FindingDetails } from '../components/security/FindingDetails.jsx';
-import { DependencyDetails } from '../components/security/DependencyDetails.jsx';
-import { formatDate, scoreColor, errorMessage, pluralize } from '../utils/helpers.js';
-import { TrendingUp, TrendingDown, Download, FileSearch, Repeat, Search } from 'lucide-react';
+import { RiskBar } from '../components/security/RiskBar.jsx';
+import { FindingTable } from '../components/security/FindingTable.jsx';
+import {
+  formatDate, scoreLabelText, errorMessage, rescanStatus, isDependency, sumCounts, cx,
+} from '../utils/helpers.js';
+import { Repeat, Download, ShieldCheck, TrendingUp, TrendingDown, Search } from 'lucide-react';
 
 export default function ScanDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [scan, setScan] = useState(null);
+  const [project, setProject] = useState(null);
   const [comparison, setComparison] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState('all');
-  const [kindFilter, setKindFilter] = useState('all'); // 'all' | 'code' | 'dependency'
+  const [kindFilter, setKindFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'resolved' | 'remaining' | 'new'
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const allFindings = scan?.findings || [];
-  const q = query.trim().toLowerCase();
-  const comparisonDetail = comparison?.detail?.counts;
-  const resolvedByKey = comparisonDetail
-    ? new Set(comparison.detail?.resolved?.map((r) => r.finding.comparisonKey) || [])
-    : null;
-  const newByKey = comparisonDetail
-    ? new Set(comparison.detail?.new?.map((r) => r.finding.comparisonKey) || [])
-    : null;
-  const fKind = (f) => (f.kind === 'dependency' ? 'dependency' : 'code');
-  const findings = allFindings
-    .filter((f) => kindFilter === 'all' || fKind(f) === kindFilter)
-    .filter((f) => filter === 'all' || f.severity === filter)
-    .filter((f) => {
-      if (statusFilter === 'resolved') return resolvedByKey && resolvedByKey.has(f.comparisonKey);
-      if (statusFilter === 'new') return newByKey && newByKey.has(f.comparisonKey);
-      if (statusFilter === 'remaining') {
-        if (!resolvedByKey) return true;
-        return !resolvedByKey.has(f.comparisonKey) && !(newByKey && newByKey.has(f.comparisonKey));
-      }
-      return true;
-    })
-    .filter((f) => !q || `${f.title} ${f.category || ''} ${f.filePath || ''} ${f.affectedCode || ''} ${f.reason || ''}`.toLowerCase().includes(q));
-  const safeIndex = findings.length ? Math.min(activeIndex, findings.length - 1) : -1;
-  const severityCounts = scan?.severityCounts;
-  const comparisonData = comparison?.comparison;
-  const depSummary = scan?.dependencySummary || { total: 0, vulnerable: 0, direct: 0, transitive: 0 };
-  const hasDeps = (scan?.dependencySummary?.total || 0) > 0;
 
   useEffect(() => {
+    let mounted = true;
     async function load() {
       try {
-        const [{ data: scanRes }, compRes] = await Promise.all([
+        const [{ data: s }, comp, proj] = await Promise.all([
           api.get(`/scans/${id}`),
           api.get(`/scans/${id}/comparison`).catch(() => null),
+          api.get('/projects').catch(() => ({ data: { projects: [] } })),
         ]);
-        setScan(scanRes.scan);
-        if (compRes) setComparison(compRes.data);
+        if (!mounted) return;
+        setScan(s.scan);
+        if (comp) setComparison(comp.data);
+        setProject((proj.data.projects || []).find((p) => p.id === s.scan.project) || null);
       } catch (err) {
-        setError(errorMessage(err));
+        if (mounted) setError(errorMessage(err));
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     }
     load();
+    return () => {
+      mounted = false;
+    };
   }, [id]);
 
-  function openFinding(f) {
-    setSelected(f);
-    try {
-      window.history.replaceState(null, '', `#finding=${encodeURIComponent(f.comparisonKey)}`);
-    } catch {
-      /* ignore history API failures */
-    }
-  }
-
-  function closeFinding() {
-    setSelected(null);
-    try {
-      window.history.replaceState(null, '', window.location.pathname);
-    } catch {
-      /* ignore history API failures */
-    }
-  }
-
-  // Deep-link support: #finding=<comparisonKey> auto-opens the detail modal.
+  // Preserve legacy deep links (#finding=<key>) by forwarding to the finding page.
   useEffect(() => {
+    if (!scan) return;
     const hash = window.location.hash;
-    if (!hash.startsWith('#finding=') || !scan) return;
+    if (!hash.startsWith('#finding=')) return;
     const key = decodeURIComponent(hash.slice('#finding='.length));
     const f = (scan.findings || []).find((x) => x.comparisonKey === key);
-    if (f) setSelected(f);
-  }, [scan]);
+    if (f) navigate(`/findings/${scan.id}/${encodeURIComponent(key)}`, { replace: true });
+  }, [scan, navigate]);
 
-  // Keyboard navigation across the findings list (↑/↓ move, Enter opens).
-  useEffect(() => {
-    function onKey(e) {
-      const tag = (e.target?.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
-      if (selected || findings.length === 0) return;
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 1, findings.length - 1));
-      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === 'Enter') {
-        const f = findings[safeIndex];
-        if (f) {
-          e.preventDefault();
-          openFinding(f);
-        }
-      }
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [selected, findings, safeIndex]);
+  const findings = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (scan?.findings || [])
+      .filter((f) => kindFilter === 'all' || (kindFilter === 'dependency' ? isDependency(f) : !isDependency(f)))
+      .filter((f) => filter === 'all' || f.severity === filter)
+      .filter((f) => {
+        if (statusFilter === 'all') return true;
+        const st = rescanStatus(f, comparison);
+        if (statusFilter === 'new') return st?.label === 'New';
+        if (statusFilter === 'remaining') return st?.label === 'Pre-existing';
+        if (statusFilter === 'unclassified') return !st;
+        return false;
+      })
+      .filter((f) => !q || `${f.title} ${f.category || ''} ${f.filePath || ''} ${f.affectedCode || ''} ${f.reason || ''}`.toLowerCase().includes(q));
+  }, [scan, kindFilter, filter, statusFilter, query, comparison]);
 
-  // Keep the active card in view while navigating and reset on filter changes.
-  useEffect(() => {
-    if (safeIndex < 0) return;
-    const el = document.querySelector(`[data-fidx="${safeIndex}"]`);
-    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [safeIndex]);
+  if (loading) return <Layout><PageLoader label="Loading scan results…" detail="Gathering findings, evidence and comparison data." /></Layout>;
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [id, filter, statusFilter, q, kindFilter]);
+  if (error) {
+    return (
+      <Layout>
+        <ErrorState title="Could not load this scan" message={error} onRetry={() => window.location.reload()} />
+      </Layout>
+    );
+  }
 
-  if (loading) return <Layout><PageLoader label="Loading scan results..." /></Layout>;
+  const sev = scan?.severityCounts || {};
+  const depSev = scan?.dependencySeverityCounts || {};
+  const hasDeps = (scan?.dependencySummary?.total || 0) > 0;
+  const comparisonData = comparison?.comparison;
+  const all = scan?.findings || [];
+  const confirmed = all.filter((f) => f.verdict === 'CONFIRMED').length;
+  const potential = all.filter((f) => f.verdict === 'POTENTIAL').length;
+  const resolvedCount = comparison?.detail?.counts?.resolved || 0;
+  const newCount = comparison?.detail?.counts?.new || 0;
+  const delta = comparisonData && typeof comparisonData.delta === 'number' ? comparisonData.delta : null;
 
-  function downloadReport() {
-    // Authenticated blob download so the Bearer token is sent (fixes the
-    // window.open 401 noted in the security hardening report).
-    api.get(`/reports/${scan.id}/download`, { responseType: 'blob' })
+  function download(kind) {
+    const path = kind === 'sarif' ? `/reports/${scan.id}/sarif` : `/reports/${scan.id}/download`;
+    const name = kind === 'sarif' ? `vulnlens-scan-${scan.id}.sarif` : `vulnlens-report-${scan.id}.json`;
+    api.get(path, { responseType: 'blob' })
       .then((res) => {
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const a = document.createElement('a');
         a.href = url;
-        a.download = `vulnlens-report-${scan.id}.json`;
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -156,221 +119,157 @@ export default function ScanDetailPage() {
       })
       .catch((err) => setError(errorMessage(err)));
   }
-
-  function downloadSarif() {
-    // Authenticated, ownership-checked SARIF 2.1.0 download.
-    api.get(`/reports/${scan.id}/sarif`, { responseType: 'blob' })
-      .then((res) => {
-        const url = window.URL.createObjectURL(new Blob([res.data]));
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `vulnlens-scan-${scan.id}.sarif`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      })
-      .catch((err) => setError(errorMessage(err)));
-  }
-
 
   return (
     <Layout>
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Link to="/scans" className="text-xs text-sky-400 hover:text-sky-300">← Scans</Link>
-            <h1 className="mt-1 text-xl font-bold text-slate-50">Scan Results</h1>
-            <p className="text-sm text-slate-400">
-              {scan?.fileCount > 0 ? `${scan.fileCount} files · ` : ''}{scan?.fileName || 'Scan'} · {formatDate(scan?.createdAt)}
+      <PageHeader
+        eyebrow="Scans"
+        title={project?.name || 'Scan Results'}
+        description={
+          <>
+            {scan.fileName} · {formatDate(scan.createdAt)} · <span className="tabular-nums">{scan.fileCount} files</span> analyzed
+          </>
+        }
+        backTo="/scans"
+        backLabel="Scan history"
+        actions={
+          <>
+            <Link to="/scans/new" className="btn-secondary"><Repeat size={14} /> Rescan</Link>
+            <Button variant="secondary" onClick={() => download('json')}><Download size={14} /> JSON report</Button>
+            <Button variant="secondary" onClick={() => download('sarif')}><Download size={14} /> SARIF</Button>
+          </>
+        }
+      />
+
+      {/* Headline cards */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Card className="card-pad flex flex-col items-center justify-center gap-1">
+          <SecurityScore score={scan.score} size={140} strokeWidth={11} />
+          <p className="mt-1 text-2xs text-slate-500">{scoreLabelText(scan.score)} posture</p>
+        </Card>
+
+        <Card className="flex flex-col p-5">
+          <p className="eyebrow">Findings</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(['critical', 'high', 'medium', 'low', 'informational']).map((s) =>
+              (sev[s] || 0) > 0 ? (
+                <span key={s} className="inline-flex items-center gap-1.5 rounded border border-edge bg-base-850 px-2 py-1">
+                  <SeverityBadge severity={s} />
+                  <span className="font-mono text-sm font-bold tabular-nums text-slate-100">{sev[s]}</span>
+                </span>
+              ) : null
+            )}
+            {sumCounts(sev) === 0 ? <span className="text-sm text-slate-500">No issues detected.</span> : null}
+          </div>
+          <div className="mt-4">
+            <RiskBar counts={sev} showLegend={false} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-slate-500">
+            <span className="text-slate-400">{all.length} total</span>
+            <span className="text-critical">{confirmed} confirmed</span>
+            <span className="text-amber-300/80">{potential} potential</span>
+          </div>
+        </Card>
+
+        <Card className="flex flex-col p-5">
+          <p className="eyebrow">Regression check</p>
+          {comparisonData && delta !== null ? (
+            <>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={cx('text-2xl font-bold tabular-nums', delta >= 0 ? 'text-emerald-400' : 'text-critical')}>
+                  {delta >= 0 ? '+' : ''}{delta}
+                </span>
+                <span className="text-xs text-slate-500">score vs previous scan</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <StatusBadge tone="success" label={`${resolvedCount} resolved`} />
+                {newCount > 0 ? <StatusBadge tone="critical" label={`${newCount} new`} /> : null}
+                {delta >= 0 ? <TrendingUp size={15} className="text-emerald-400" /> : <TrendingDown size={15} className="text-critical" />}
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                Comparison against the previous scan of this project
+                {comparisonData.previousScore !== undefined ? ` (score ${comparisonData.previousScore} → ${scan.score})` : ''}.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+              This is the first scan for this project. Scan the same code again after fixes to see
+              resolved / remaining / new findings here.
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link to="/new-scan" className="btn-secondary"><Repeat size={15} /> Rescan</Link>
-            <Button variant="secondary" onClick={downloadReport}><Download size={15} /> Download Report</Button>
-            <Button variant="secondary" onClick={downloadSarif}>
-              <Download size={15} /> Download SARIF
-            </Button>
-          </div>
-        </div>
-
-        {error && <Alert variant="error">{error}</Alert>}
-
-        {scan && (
-          <div className="flex flex-col gap-5">
-            {/* Score + severity */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Card className="card-pad flex flex-col items-center justify-center gap-2">
-                <SecurityScore score={scan.score} size={120} strokeWidth={11} />
-                <span className="text-[11px] text-slate-500">{pluralize(findings.length, 'finding')} detected</span>
-              </Card>
-              <div className="card card-pad">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Severity Distribution</span>
-                <SeverityChart counts={severityCounts} className="mt-2" />
-              </div>
-              <Card className="card-pad flex flex-col justify-center gap-3">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Comparison</span>
-                {comparisonData && typeof comparisonData.delta === 'number' ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className={`flex items-center gap-1 text-xl font-bold ${comparisonData.delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {comparisonData.delta >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
-                        {comparisonData.delta >= 0 ? '+' : ''}{comparisonData.delta}
-                      </span>
-                      <span className="text-xs text-slate-500">vs previous ({comparisonData.previousScore})</span>
-                    </div>
-                    <div className="flex gap-4 text-xs">
-                      <span className="text-emerald-400">{pluralize(comparisonData.resolved, 'resolved')}</span>
-                      <span className="text-slate-300">{pluralize(comparisonData.remaining, 'remaining')}</span>
-                      <span className="text-red-400">{pluralize(comparisonData.new, 'new')}</span>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-xs text-slate-500">This is the first scan. Run it again after fixing code to see verification.</p>
-                )}
-              </Card>
-            </div>
-
-            {/* Dependencies overview (Phase 2) */}
-            {hasDeps ? (
-              <div className="card card-pad">
-                <div className="grid gap-5 lg:grid-cols-2">
-                  <div>
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Dependencies</span>
-                    <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                      <div>
-                        <div className="text-lg font-bold text-slate-100">{depSummary.total}</div>
-                        <div className="text-[11px] text-slate-500">packages</div>
-                      </div>
-                      <div>
-                        <div className="text-lg font-bold text-slate-100">{depSummary.direct}</div>
-                        <div className="text-[11px] text-slate-500">direct</div>
-                      </div>
-                      <div>
-                        <div className="text-lg font-bold text-slate-100">{depSummary.transitive}</div>
-                        <div className="text-[11px] text-slate-500">transitive</div>
-                      </div>
-                      <div>
-                        <div className={`text-lg font-bold ${depSummary.vulnerable ? 'text-amber-400' : 'text-emerald-400'}`}>{depSummary.vulnerable}</div>
-                        <div className="text-[11px] text-slate-500">vulnerable</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">Dependency Severity</span>
-                    <SeverityChart counts={scan?.dependencySeverityCounts} className="mt-2" />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Findings list */}
-            <Card>
-              <CardHeader
-                title="Findings"
-                subtitle={`${(scan.findings || []).length} total · showing ${findings.length}`}
-                actions={
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <div className="relative">
-                      <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                      <input
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search findings..."
-                        className="input w-44 pl-8 text-xs"
-                        aria-label="Search findings"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {[
-                        { key: 'all', label: 'All' },
-                        { key: 'code', label: 'Code' },
-                        { key: 'dependency', label: 'Dependencies' },
-                      ].map((k) => (
-                        <button
-                          key={k.key}
-                          onClick={() => setKindFilter(k.key)}
-                          className={`rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors ${
-                            kindFilter === k.key ? 'bg-sky-600/20 text-sky-300' : 'text-slate-500 hover:bg-base-800 hover:text-slate-300'
-                          }`}
-                        >
-                          {k.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {['all', 'critical', 'high', 'medium', 'low', 'informational'].map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setFilter(s)}
-                          className={`rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors ${
-                            filter === s ? 'bg-sky-600/20 text-sky-300' : 'text-slate-500 hover:bg-base-800 hover:text-slate-300'
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                }
-              />
-              {comparisonDetail && findings.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 border-b border-borderline px-4 py-2">
-                  <span className="mr-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">Status</span>
-                  {[
-                    { key: 'all', label: 'All' },
-                    { key: 'remaining', label: 'Remaining' },
-                    { key: 'resolved', label: 'Resolved' },
-                    { key: 'new', label: 'New' },
-                  ].map((s) => (
-                    <button
-                      key={s.key}
-                      onClick={() => setStatusFilter(s.key)}
-                      className={`rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors ${
-                        statusFilter === s.key ? 'bg-sky-600/20 text-sky-300' : 'text-slate-500 hover:bg-base-800 hover:text-slate-300'
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                  <span className="ml-auto text-[11px] tabular-nums text-slate-600">
-                    {findings.length} shown · ↑/↓ to navigate · Enter to open
-                  </span>
-                </div>
-              )}
-              {findings.length === 0 ? (
-                <div className="p-5">
-                  <EmptyState icon={FileSearch} title="No findings" message={scan.findings && scan.findings.length ? 'No findings match the current filters or search.' : 'This code passed static analysis with no detected issues.'} />
-                </div>
-              ) : (
-                <div className="grid gap-2 p-4 sm:grid-cols-2">
-                  {findings.map((f, i) => (
-                    <div key={f.comparisonKey} className="relative" data-fidx={i}>
-                      <FindingCard
-                        finding={f}
-                        onClick={() => openFinding(f)}
-                        className={i === safeIndex ? 'ring-2 ring-sky-500/40 border-sky-500/60' : ''}
-                      />
-                      {resolvedByKey && resolvedByKey.has(f.comparisonKey) && (
-                        <span className="absolute right-2 top-2 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">Resolved</span>
-                      )}
-                      {newByKey && newByKey.has(f.comparisonKey) && (
-                        <span className="absolute right-2 top-2 rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-300">New</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-        )}
+          )}
+        </Card>
       </div>
 
-      <Modal open={!!selected} onClose={closeFinding} title={selected?.kind === 'dependency' ? 'Dependency Details' : 'Finding Details'} maxWidth="max-w-3xl">
-        {selected ? (
-          selected.kind === 'dependency' ? <DependencyDetails finding={selected} /> : <FindingDetails finding={selected} />
-        ) : null}
-      </Modal>
+      {/* Dependency strip */}
+      {hasDeps ? (
+        <Card className="card-pad">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={15} className="text-amber-300" />
+              <p className="text-sm font-semibold text-slate-100">Dependencies</p>
+              <span className="text-xs text-slate-500">
+                {scan.dependencySummary.total} packages · {scan.dependencySummary.vulnerable} vulnerable
+              </span>
+            </div>
+            <div className="w-48"><RiskBar counts={depSev} showLegend={false} /></div>
+          </div>
+        </Card>
+      ) : null}
+
+      {/* Findings list */}
+      <Card className="mt-5">
+        <CardHeader
+          title="Findings"
+          subtitle={`${all.length} total · ${findings.length} shown`}
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="relative">
+                <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search findings…" className="input w-40 pl-8 text-xs" aria-label="Search findings" />
+              </div>
+              <div className="flex items-center gap-1">
+                {[{ k: 'all', label: 'All' }, { k: 'code', label: 'Code' }, { k: 'dependency', label: 'Dependencies' }].map((t) => (
+                  <button key={t.k} onClick={() => setKindFilter(t.k)} aria-pressed={kindFilter === t.k} className={cx('rounded px-2 py-1 text-[11px] font-medium transition-colors', kindFilter === t.k ? 'bg-accent-600/25 text-accent-200' : 'text-slate-500 hover:bg-base-800 hover:text-slate-300')}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                {[{ k: 'all', label: 'All' }, ...['critical', 'high', 'medium', 'low', 'informational'].map((s) => ({ k: s, label: s }))].map((t) => (
+                  <button key={t.k} onClick={() => setFilter(t.k)} aria-pressed={filter === t.k} className={cx('rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors', filter === t.k ? 'bg-accent-600/25 text-accent-200' : 'text-slate-500 hover:bg-base-800 hover:text-slate-300')}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {comparison?.detail ? (
+                <div className="flex items-center gap-1">
+                  {[{ k: 'all', label: 'All' }, { k: 'new', label: 'New' }, { k: 'remaining', label: 'Pre-existing' }].map((t) => (
+                    <button key={t.k} onClick={() => setStatusFilter(t.k)} aria-pressed={statusFilter === t.k} className={cx('rounded px-2 py-1 text-[11px] font-medium capitalize transition-colors', statusFilter === t.k ? 'bg-accent-600/25 text-accent-200' : 'text-slate-500 hover:bg-base-800 hover:text-slate-300')}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          }
+        />
+        {findings.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              icon={ShieldCheck}
+              tone={all.length ? 'default' : 'success'}
+              title={all.length ? 'No findings match the current filters' : 'No vulnerabilities detected'}
+              message={all.length ? 'Try clearing filters or your search term.' : 'This code passed deterministic static analysis with no detected issues.'}
+            />
+          </div>
+        ) : (
+          <FindingTable
+            findings={findings}
+            statusOf={(f) => rescanStatus(f, comparison)}
+            onOpen={(f) => navigate(`/findings/${scan.id}/${encodeURIComponent(f.comparisonKey)}`)}
+          />
+        )}
+      </Card>
     </Layout>
   );
 }

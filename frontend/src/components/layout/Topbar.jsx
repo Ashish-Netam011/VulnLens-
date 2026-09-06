@@ -1,8 +1,9 @@
 import { useAuth } from '../../context/AuthContext.jsx';
-import { useNavigate } from 'react-router-dom';
-import { LogOut, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LogOut, Menu, Plus } from 'lucide-react';
+import { cx } from '../../utils/helpers.js';
 
-export function Topbar() {
+export function Topbar({ onMenu }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -11,27 +12,37 @@ export function Topbar() {
     navigate('/login');
   }
 
+  const initials = (user?.name || user?.email || 'U')
+    .split(/[\s@]+/)
+    .map((s) => s[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-borderline bg-base-900 px-4">
-      <div className="flex items-center gap-2.5 lg:hidden">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-sky-600/20 text-sky-400">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8Z"/>
-            <circle cx="12" cy="10" r="3"/>
-          </svg>
-        </div>
-        <span className="text-sm font-bold text-slate-100">VulnLens<span className="text-sky-400"> AI</span></span>
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-edge bg-base-925/60 px-4 backdrop-blur sm:px-6">
+      <div className="flex items-center gap-2">
+        <button onClick={onMenu} className="btn-ghost p-2 lg:hidden" aria-label="Open navigation">
+          <Menu size={18} />
+        </button>
+        {/* Breadcrumb context is provided by each page header. */}
       </div>
 
-      <div />
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-base-700 text-slate-300">
-            <User size={13} />
+      <div className="flex items-center gap-2.5">
+        <Link to="/scans/new" className="btn-primary hidden sm:inline-flex" aria-label="Start a new scan">
+          <Plus size={15} /> New Scan
+        </Link>
+        <div className="mx-1 hidden h-6 w-px bg-edge sm:block" aria-hidden="true" />
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-base-800 text-[11px] font-bold text-accent-300 ring-1 ring-inset ring-edge-strong" aria-hidden="true">
+            {initials || 'U'}
           </div>
-          <span className="hidden text-[13px] sm:inline">{user?.name || user?.email}</span>
+          <span className={cx('hidden max-w-[140px] truncate text-[13px] text-slate-300', 'md:inline')}>
+            {user?.name || user?.email}
+          </span>
         </div>
-        <button onClick={handleLogout} className="btn-ghost p-1.5 text-slate-500 hover:text-slate-200" title="Sign out">
+        <button onClick={handleLogout} className="btn-ghost p-2 text-slate-500 hover:text-slate-200" title="Sign out" aria-label="Sign out">
           <LogOut size={15} />
         </button>
       </div>

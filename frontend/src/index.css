@@ -7,58 +7,135 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-base-950 text-slate-200 antialiased;
+    @apply bg-base-950 font-sans text-slate-300 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv11', 'ss01';
   }
   ::selection {
-    @apply bg-slate-600/50;
+    @apply bg-accent-500/30 text-white;
+  }
+
+  /* Visible, consistent keyboard focus — never rely on color alone. */
+  :focus-visible {
+    outline: 2px solid rgba(129, 140, 248, 0.7);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  a {
+    @apply text-slate-300;
   }
 }
 
 @layer components {
+  /* ── Surfaces ─────────────────────────────────────────────── */
   .card {
-    @apply rounded-lg border border-borderline bg-base-900;
+    @apply rounded-lg border border-edge bg-base-900/90;
   }
   .card-pad {
     @apply p-5;
   }
+  .panel {
+    @apply rounded-lg border border-edge bg-base-900/70;
+  }
+
+  /* ── Typography helpers ───────────────────────────────────── */
+  .eyebrow {
+    @apply text-2xs font-semibold uppercase tracking-widest2 text-slate-500;
+  }
+  .mono {
+    @apply font-mono;
+  }
+  .code-line {
+    @apply font-mono text-[13px] leading-relaxed;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────── */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-3.5 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-45;
   }
   .btn-primary {
-    @apply btn bg-sky-600 text-white hover:bg-sky-500;
+    @apply btn bg-accent-600 text-white hover:bg-accent-500;
   }
   .btn-secondary {
-    @apply btn border border-borderline bg-base-800 text-slate-200 hover:bg-base-700;
-  }
-  .btn-danger {
-    @apply btn bg-red-600/90 text-white hover:bg-red-600;
+    @apply btn border border-edge-strong bg-base-800/80 text-slate-200 hover:border-slate-500 hover:bg-base-750;
   }
   .btn-ghost {
     @apply btn text-slate-400 hover:bg-base-800 hover:text-slate-200;
   }
+  .btn-danger {
+    @apply btn bg-critical/15 text-critical hover:bg-critical/25;
+  }
+
+  /* ── Forms ────────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-md border border-borderline bg-base-850 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600;
+    @apply w-full rounded-md border border-edge-strong bg-base-925 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500;
   }
   .label {
-    @apply mb-1.5 block text-sm font-medium text-slate-400;
+    @apply mb-1.5 block text-xs font-medium text-slate-400;
   }
-  .code-block {
-    @apply font-mono text-[13px] leading-relaxed;
+
+  /* ── Chips / misc ─────────────────────────────────────────── */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded border border-edge bg-base-850 px-2 py-0.5 text-2xs font-medium text-slate-400;
+  }
+  .kbd {
+    @apply rounded border border-edge-strong bg-base-850 px-1 py-px font-mono text-[10px] text-slate-500;
+  }
+
+  /* ── Data-flow rail animation ─────────────────────────────── */
+  .flow-pulse {
+    animation: flowPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes flowPulse {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 0.9;
+    }
+  }
+
+  .fade-in {
+    animation: fadeIn 160ms ease-out both;
+  }
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 }
 
-/* Custom scrollbar for code areas */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #263141;
-  border-radius: 4px;
+  background: #26344a;
+  border: 2px solid #0a0e13;
+  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #314155;
+  background: #33445e;
+}
+
+/* Respect reduced-motion preferences (a11y). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

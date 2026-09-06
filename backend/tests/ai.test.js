@@ -47,35 +47,35 @@ test('parseStructured: ignores entries without comparisonKey', () => {
 // ── analyzeWithAI behavior ───────────────────────────────────────────
 test('analyzeWithAI: returns ok=false when provider disabled', async () => {
   // Must simulate AI_PROVIDER=none by pointing at a nonexistent provider.
-  const original = process.env.AI_PROVIDER;
-  process.env.AI_PROVIDER = 'none';
+  const original = env.AI_PROVIDER;
+  env.AI_PROVIDER = 'none';
   try {
     const result = await analyzeWithAI({ code: 'x', findings: [] });
     assert.equal(result.ok, false);
     assert.equal(result.source, 'none');
   } finally {
-    process.env.AI_PROVIDER = original;
+    env.AI_PROVIDER = original;
   }
 });
 
 test('analyzeWithAI: returns ok=false for unknown provider', async () => {
-  const original = process.env.AI_PROVIDER;
-  process.env.AI_PROVIDER = 'does-not-exist';
+  const original = env.AI_PROVIDER;
+ env.AI_PROVIDER = 'does-not-exist';
   try {
     const result = await analyzeWithAI({ code: 'x', findings: [] });
     assert.equal(result.ok, false);
   } finally {
-    process.env.AI_PROVIDER = original;
+    env.AI_PROVIDER = original;
   }
 });
 
 test('isAIEnabled: false when AI disabled', () => {
-  const original = process.env.AI_PROVIDER;
-  process.env.AI_PROVIDER = 'none';
+  const original =env.AI_PROVIDER;
+  env.AI_PROVIDER = 'none';
   try {
     assert.equal(isAIEnabled(), false);
   } finally {
-    process.env.AI_PROVIDER = original;
+    env.AI_PROVIDER = original;
   }
 });
 

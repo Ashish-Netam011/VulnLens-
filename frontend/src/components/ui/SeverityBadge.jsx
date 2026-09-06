@@ -1,13 +1,31 @@
 import { severityMeta } from '../../utils/helpers.js';
+import { AlertCircle, AlertTriangle, OctagonAlert, Info, Hash } from 'lucide-react';
 
-export function SeverityBadge({ severity, showLabel = true, className = '' }) {
+const ICONS = {
+  critical: OctagonAlert,
+  high: AlertTriangle,
+  medium: AlertCircle,
+  low: Info,
+  informational: Hash,
+};
+
+/**
+ * Severity indicator: icon + label + tone. Color is a supporting signal only —
+ * the label and icon always carry the meaning.
+ */
+export function SeverityBadge({ severity, showLabel = true, size = 'md', className = '' }) {
   const meta = severityMeta(severity);
+  const Icon = ICONS[severity] || Info;
+  const pad = size === 'sm' ? 'px-1.5 py-px gap-1 text-[10px]' : 'px-2 py-0.5 gap-1.5 text-[11px]';
+  const iconSize = size === 'sm' ? 11 : 12.5;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${meta.badge} ${className}`.trim()}
+      className={`inline-flex items-center rounded border font-semibold uppercase tracking-wide ${meta.badge} ${pad} ${className}`.trim()}
+      role="img"
+      aria-label={`Severity ${meta.label}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {showLabel ? meta.label : null}
+      <Icon size={iconSize} strokeWidth={2.4} aria-hidden="true" />
+      {showLabel ? <span>{meta.label}</span> : null}
     </span>
   );
 }

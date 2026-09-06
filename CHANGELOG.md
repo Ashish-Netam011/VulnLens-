@@ -3,6 +3,55 @@
 All notable changes to **VulnLens** are documented here, grouped by phase. The
 project uses a phase-based roadmap (see `README.md` → Phase roadmap).
 
+## UI/UX Redesign — Security Investigation Cockpit (2026-09-06)
+
+Complete frontend redesign around the product story **detect the risk → trace
+the attack path → understand the impact → fix the vulnerability**. The
+redesign is presentation-only: no scanner rule, verdict, severity, baseline,
+SARIF, CI, or AI-safety behavior changed. Every screen renders real,
+endpoint-backed data — nothing is fabricated.
+
+### Backend (additive, read-only)
+- `GET /api/scans/:id/source?file=&around=` — bounded (~40-line) source window
+  for a finding, owner-scoped exactly like other scan routes, resolved purely
+  against the scan's own stored sources (no filesystem access). Strict file
+  grammar rejects `..`, percent-encoding, backslashes, absolute/drive paths
+  with 400; well-formed-but-absent files return 404; non-integer/out-of-range
+  lines return 400. `backend/src/controllers/scanController.js` +
+  `backend/src/routes/scans.js`.
+- `backend/tests/integration/source-context.integration.test.js` — 13 tests
+  (auth, path safety incl. encoded/cross-scan traversal, window clamping,
+  validation, correctness) against the in-memory MongoDB HTTP harness.
+
+### Frontend redesign
+- Design system: layered graphite palette + indigo accent, Inter/JetBrains
+  Mono tokens, CSS primitives, focus-visible rings, reduced-motion support
+  (`tailwind.config.js`, `index.css`).
+- Component library: `SeverityBadge` (icon+label, never color-only),
+  `StatusBadge`, `EmptyState`/`ErrorState`/`Skeleton`, accessible `Modal`,
+  `CopyButton`, `RiskBar`, `CodeWindow` (line-numbered source w/ source/sink
+  emphasis), `DataFlowGraph` (SOURCE → propagation → SINK), `FindingTable`
+  (sortable, keyboard accessible), `CopilotPanel`.
+- New IA: Overview (+ Projects), Scans (New Scan / History), Findings,
+  Security Analysis → Data Flow, AI Copilot, Reports, Settings — compact,
+  group-based sidebar with current-page state and a mobile drawer.
+- Overview (`/`): security posture score, latest-scan summary, risk
+  distribution, recent scans, priority findings.
+- Scans: honest scan experience (no fake progress; real per-file read count
+  and request states) with a completion summary; history table with files,
+  findings, score trend.
+- Findings hub + dedicated Finding Detail (`/findings/:scanId/:key`): verdict
+  header, “what happened”, source window with sink/source emphasis, data-flow
+  diagram, deterministic-evidence side panel, and the AI Copilot panel wired
+  to `POST /api/ai/explain` (auto, cached, retry, unavailable state).
+  Keyboard left/right navigation across findings of a scan.
+- Security Analysis / Data Flow page, AI Copilot hub, Reports (SARIF/JSON/
+  summary exports via the real authenticated endpoints), and Settings
+  (session-only, no invented toggles).
+- A pre-existing bug fixed along the way: rescan status chips now read the
+  real `/comparison` detail arrays (`newlyIntroduced`/`remaining`/`resolved`)
+  so New/Pre-existing labels actually render.
+
 ## Phase 8 — AI Security Copilot (2026-09-06)
 
 Opt-in AI explanations on top of deterministic findings. The deterministic

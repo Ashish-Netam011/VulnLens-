@@ -16,6 +16,7 @@
  * here (so `npm test` stays green). It is validated by a one-off local CI
  * simulation and documented in docs/ci-cd-github-actions.md.
  */
+import crypto from 'node:crypto';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -266,13 +267,35 @@ test('integrity: unchanged baseline hashes identically (record -> run -> verify)
   assert.equal(verify.status, 0, 'verify command must succeed');
   assert.equal(verify.stdout.trim(), record.stdout.trim(), 'same contents must yield the same hash');
 });
-
 test('integrity: modified baseline hashes differently (runtime tampering detected)', () => {
   const file = tmpPath('tampered.json');
-  fs.writeFileSync(file, JSON.stringify({ version: 1, entries: [] }));
-  const before = spawnSync('bash', ['-c', `sha256sum "${file}" | awk '{print $1}'`], { encoding: 'utf8' }).stdout.trim();
-  // Simulate a process modifying the baseline mid-job.
-  fs.writeFileSync(file, JSON.stringify({ version: 1, entries: [{ filePath: 'a.js', ruleId: 'r', line: 1 }] }));
-  const after = spawnSync('bash', ['-c', `sha256sum "${file}" | awk '{print $1}'`], { encoding: 'utf8' }).stdout.trim();
-  assert.notEqual(after, before, 'a modified baseline must produce a different hash');
+
+  const hashFile = () =>
+    crypto
+      .createHash('sha256')
+      .update(fs.readFileSync(file))
+      .digest('hex');
+
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ version: 1, entries: [] })
+  );
+
+  const before = hashFile();
+
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      version: 1,
+      entries: [{ filePath: 'a.js', ruleId: 'r', line: 1 }]
+    })
+  );
+
+  const after = hashFile();
+
+  assert.notEqual(
+    after,
+    before,
+    'a modified baseline must produce a different hash'
+  );
 });

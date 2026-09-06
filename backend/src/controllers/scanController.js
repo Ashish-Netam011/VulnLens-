@@ -146,6 +146,99 @@ export async function getScan(req, res, next) {
   }
 }
 
+// Bounded source window for the Finding Detail code viewer / AI Copilot
+// context. Read-only, owner-scoped, and resolved PURELY against the scan's own
+// stored sources (never the filesystem), so path traversal is impossible by
+// construction: the requested file must normalize to an exact stored entry.
+const SOURCE_WINDOW_ABOVE = 20; // lines before the target
+const SOURCE_WINDOW_BELOW = 19; // lines after the target (≈40 total)
+const SOURCE_LINE_MAX_CHARS = 320;
+
+/**
+ * Strict source-file parameter grammar. Only a plain, relative, unescaped
+ * path is acceptable (e.g. `src/api.js`). Anything that could be a traversal
+ * or encoding trick — `..` segments, percent-encoding, backslashes, absolute
+ * paths, drive letters, control bytes — is rejected outright with 400 so such
+ * attempts can never even be resolved against the stored file list.
+ */
+function isSafeSourceFileParam(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 500) return false;
+  if (value.includes('..')) return false; // traversal segments
+  if (value.includes('%')) return false; // encoded traversal/null tricks
+  if (value.includes('\\') || value.includes('\0') || value.includes('\r') || value.includes('\n')) return false;
+  if (value.startsWith('/') || /^[a-zA-Z]:/.test(value)) return false; // absolute / drive paths
+  if (/^[. ]+$/.test(value)) return false;
+  return true;
+}
+
+export async function getScanSource(req, res, next) {
+  try {
+    // `around` = target line; must be a positive integer. The client can never
+    // request an arbitrary window size.
+    const around = Number(req.query.around);
+    if (!Number.isInteger(around) || around < 1) {
+      return res.status(400).json({ error: 'around must be a positive integer line number' });
+    }
+
+    const scan = await Scan.findOne({ _id: req.params.id, owner: req.userId })
+      .select('sourceCode fileName sourceFiles.path sourceFiles.content')
+      .exec();
+    if (!scan) return res.status(404).json({ error: 'Scan not found' });
+
+    const sourceFiles = Array.isArray(scan.sourceFiles) ? scan.sourceFiles : [];
+    let fileName;
+    let content;
+
+    const fileParam = req.query.file;
+    const hasFileParam = fileParam !== undefined;
+    if (hasFileParam && typeof fileParam === 'string' && !isSafeSourceFileParam(fileParam)) {
+      return res.status(400).json({ error: 'Invalid file parameter' });
+    }
+    // Normalize for comparison against the scan's own stored entries. This is
+    // a pure string comparison against stored names — never a filesystem path.
+    const requested = typeof fileParam === 'string' ? sanitizeRelativePath(fileParam) : '';
+
+    if (sourceFiles.length > 0) {
+      // Multi-file (folder) scan: the file must exactly match a stored entry.
+      if (!requested) {
+        return res.status(400).json({ error: 'file is required for this scan' });
+      }
+      const entry = sourceFiles.find((f) => f.path === requested);
+      if (!entry) {
+        return res.status(404).json({ error: 'Source file not found in this scan' });
+      }
+      fileName = entry.path;
+      content = entry.content || '';
+    } else {
+      // Single-file scan: one stored source; file param must match it if given.
+      if (hasFileParam && requested !== (scan.fileName || '')) {
+        return res.status(404).json({ error: 'Source file not found in this scan' });
+      }
+      fileName = scan.fileName || 'submission.txt';
+      content = scan.sourceCode || '';
+    }
+
+    const allLines = content.split('\n');
+    const total = allLines.length;
+    if (around > total) {
+      return res.status(400).json({ error: 'Line is out of range for this file' });
+    }
+
+    const startLine = Math.max(1, around - SOURCE_WINDOW_ABOVE);
+    const endLine = Math.min(total, around + SOURCE_WINDOW_BELOW);
+    const lines = [];
+    for (let n = startLine; n <= endLine; n++) {
+      let code = allLines[n - 1] == null ? '' : allLines[n - 1];
+      if (code.length > SOURCE_LINE_MAX_CHARS) code = code.slice(0, SOURCE_LINE_MAX_CHARS - 1) + '…';
+      lines.push({ line: n, code });
+    }
+
+    return res.json({ success: true, file: fileName, startLine, endLine, targetLine: around, lines });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getScanComparison(req, res, next) {
   try {
     const scan = await Scan.findOne({ _id: req.params.id, owner: req.userId });
