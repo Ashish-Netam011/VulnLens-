@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+coverage/
+.vite/
+*.msi
+
+# Junk / tool-internal files (initial commit hygiene)
+*.tmp
+.freebuff/

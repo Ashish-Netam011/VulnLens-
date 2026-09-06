@@ -1,0 +1,173 @@
+﻿# VulnLens AI — GitHub Actions CI Security Gate (Phase 6B/6C/6D/6E)
+#
+# Reuses the existing Phase 6A production CLI (backend). It runs the exact same
+# deterministic, AI-free, DB-free scanner pipeline (5A → 5B → 5C → 5D → 5E),
+# emits SARIF 2.1.0 for GitHub Code Scanning, and fails the job when the
+# configured severity threshold is met. No secrets, no network, no AI required.
+#
+# CI SCOPE: backend/src (core first-party security-sensitive code). The
+# recursive directory scanner does NOT exclude node_modules, so CI targets the
+# first-party source tree directly.
+
+# SELF-SCAN BASELINE (Phase 6C/6D): the scanner legitimately flags ~17 of
+# its own rule patterns / doc examples as HIGH ("self-references"). These are
+# triaged, documented in docs/self-scan-triage.md, and committed to
+# backend/vulnlens.baseline.json. Phase 6D classification: current findings
+# are NEW or BASELINED (baseline entries with no match are reported RESOLVED);
+# baselined findings stay VISIBLE in the SARIF report but are excluded from
+# the --fail-on gate (re-added only when severity escalated past the severity
+# recorded in the entry), so CI is green for known, reviewed self-references
+# while still failing on any genuinely NEW HIGH finding. Missing (explicit) /
+# malformed baselines remain fail-visible workflow errors (exit 2). See
+# docs/baseline-regression-intelligence.md.
+
+# PHASE 6E HARDENING:
+#   - All third-party actions are pinned to immutable commit SHAs (verified
+#     2026-09-06 against the upstream tag refs) so a mutated tag can never
+#     inject code into this job.
+#   - `npm ci --ignore-scripts`: no third-party install scripts run in CI.
+#     Verified against package-lock.json: only fsevents (macOS-only, not
+#     installed here) and the local-test database-binary package; the scan
+#     job needs none (package names in docs/ci-cd-github-actions.md).
+#   - Baseline runtime immutability: the committed vulnlens.baseline.json is
+#     SHA-256-hashed right after checkout and re-verified after the scan. Any
+#     runtime modification during the job FAILS the job. A legitimately
+#     committed baseline change is fine - it just records a different hash at
+#     job start. The CLI schema validation (malformed -> exit 2) is unchanged
+#     and separate; this hash check is an additional integrity layer.
+
+name: vulnlens
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# Least privilege — only what this job actually needs:
+#   contents: read          # actions/checkout reads the repository source
+#   security-events: write  # required to upload SARIF to GitHub Code Scanning
+# No other scopes are requested (no write-all, issues, pull-requests, ...).
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: vulnlens-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  security-scan:
+    name: VulnLens Security Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Configurable severity threshold for `--fail-on`.
+      # Default: high (fail-closed). Override WITHOUT editing this file by
+      # setting a repository Actions *variable* named VULNLENS_FAIL_ON to one
+      # of: critical | high | medium | low | none.
+      VULNLENS_FAIL_ON: ${{ vars.VULNLENS_FAIL_ON || 'high' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4 (SHA-pinned 2026-09-06)
+
+      - name: Record baseline SHA-256 (integrity checkpoint)
+        run: |
+          # Phase 6E: snapshot the committed baseline BEFORE anything else runs
+          # (install scripts, scanner) so the verify step below can detect any
+          # runtime modification. The hash is computed from the checked-out
+          # source at job start, so a legitimately committed baseline change
+          # simply records a different hash and is accepted. Only file hashes
+          # are logged, never contents.
+          if [ ! -f vulnlens.baseline.json ]; then
+            echo "::error::vulnlens.baseline.json is missing at job start"
+            exit 1
+          fi
+          sha="$(sha256sum vulnlens.baseline.json | awk '{print $1}')"
+          echo "BASELINE_SHA256=$sha" >> "$GITHUB_ENV"
+          echo "Recorded baseline SHA-256: $sha"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # actions/setup-node v4 (SHA-pinned 2026-09-06)
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        # Phase 6E: --ignore-scripts blocks ALL third-party install scripts in
+        # CI. Verified against package-lock.json (lockfileVersion 3): only
+        # fsevents (macOS-only, not installed here) and the local-test
+        # database-binary package declare scripts; this scan job needs none.
+        # Exact versions remain pinned by the lockfile. Local
+        # developer installs (allowScripts) are unaffected.
+        run: npm ci --ignore-scripts
+
+      # The CLI writes vulnlens.sarif BEFORE it derives its exit code, so the
+      # SARIF file exists even when the security gate fails (exit 1). We capture
+      # the exit code here (set +e) WITHOUT terminating the job, so SARIF can
+      # still be uploaded in the next step.
+      - name: Scan with VulnLens (generate SARIF + capture exit code)
+        id: scan
+        run: |
+          set +e
+          npm run vulnlens -- scan src \
+            --format sarif \
+            --output "$GITHUB_WORKSPACE/vulnlens.sarif" \
+            --baseline vulnlens.baseline.json \
+            --fail-on "${VULNLENS_FAIL_ON:-high}"
+          scan_exit=$?
+          set -e
+          echo "VULNLENS_EXIT=$scan_exit" >> "$GITHUB_ENV"
+          echo "VulnLens scan exit code: $scan_exit"
+
+      # Upload SARIF so Code Scanning gets results even when the gate FAILS
+      # (exit 1). Only skipped when no SARIF was produced at all (exit 2/3).
+      - name: Upload SARIF to Code Scanning
+        if: always() && hashFiles('vulnlens.sarif') != ''
+        uses: github/codeql-action/upload-sarif@6f5948dfacef28e207b48d0905cf90c03365536d  # github/codeql-action v3 (SHA-pinned 2026-09-06)
+        with:
+          sarif_file: ${{ github.workspace }}/vulnlens.sarif
+
+      # Phase 6E: baseline runtime immutability. Recompute the SHA-256 recorded
+      # before the job ran and FAIL if it changed (tampering/deletion during
+      # the job). Runs on always() so even a failing scan cannot mask
+      # tampering. A legitimately committed baseline change passes by
+      # construction (it was hashed at job start).
+      - name: Verify baseline immutability
+        if: always()
+        run: |
+          final="$(sha256sum vulnlens.baseline.json 2>/dev/null | awk '{print $1}')"
+          if [ -z "${BASELINE_SHA256:-}" ]; then
+            echo "::error::BASELINE_SHA256 was never recorded; cannot verify baseline integrity"
+            exit 1
+          fi
+          if [ -z "$final" ]; then
+            echo "::error::vulnlens.baseline.json is missing or unreadable at verify time (deleted or replaced during the job)"
+            exit 1
+          fi
+          if [ "$final" != "$BASELINE_SHA256" ]; then
+            echo "::error::vulnlens.baseline.json changed during the CI job (recorded $BASELINE_SHA256, now $final). The security gate rejects runtime baseline modifications."
+            exit 1
+          fi
+          echo "Baseline immutable during job: SHA-256 $final"
+
+      # Apply the captured exit code WITHOUT hiding failures:
+      #   0 = PASS                    threshold not exceeded
+      #   1 = SECURITY GATE FAILED    finding(s) at/above --fail-on
+      #   2 = WORKFLOW ERROR          CLI usage/configuration error
+      #   3 = SCANNER ERROR           scanner/runtime error
+      # Exit 2/3 are never converted into success; 1/2/3 all fail the job.
+      # Fail-closed default (3) if the exit code was never captured.
+      - name: Enforce security gate
+        if: always()
+        run: |
+          code="${VULNLENS_EXIT:-3}"
+          echo "VulnLens gate result: exit $code (0=PASS, 1=SECURITY GATE FAILED, 2=WORKFLOW ERROR, 3=SCANNER ERROR)"
+          exit "$code"

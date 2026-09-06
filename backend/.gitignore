@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+coverage/
+.vite/
+
+# Captured test-run output (generated artifact)
+security_test_output.txt
+
+# Captured test-run output (generated artifacts)
+testout.txt
+testresults.txt

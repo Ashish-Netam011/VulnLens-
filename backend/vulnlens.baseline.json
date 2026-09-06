@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "purpose": "VulnLens self-scan baseline (Phase 6C). Each entry is a documented, reviewed scanner SELF-REFERENCE: the scanner flags its own rule patterns, friendlyName labels, AST library-detection regexes, and secureExample snippets. Entries are suppressed ONLY from the --fail-on exit-code gate; they still appear in scan output. A baseline entry that no longer matches a finding (e.g. because a line moved) is fail-safe: the finding returns to the gate rather than being silently hidden. See docs/self-scan-triage.md.",
+  "entries": [
+    { "filePath": "src/scanner/rules/dangerousFunctions.js", "ruleId": "eval", "line": 10 },
+    { "filePath": "src/scanner/rules/dangerousFunctions.js", "ruleId": "child-process", "line": 3 },
+    { "filePath": "src/scanner/rules/dangerousFunctions.js", "ruleId": "child-process", "line": 23 },
+    { "filePath": "src/scanner/rules/dangerousFunctions.js", "ruleId": "child-process", "line": 28 },
+    { "filePath": "src/scanner/rules/dangerousFunctions.js", "ruleId": "deserialize", "line": 35 },
+    { "filePath": "src/scanner/rules/hardcodedSecrets.js", "ruleId": "hardcoded-password", "line": 54 },
+    { "filePath": "src/scanner/rules/hardcodedSecrets.js", "ruleId": "hardcoded-secret", "line": 55 },
+    { "filePath": "src/scanner/rules/hardcodedSecrets.js", "ruleId": "hardcoded-jwtSecret", "line": 58 },
+    { "filePath": "src/scanner/rules/xss.js", "ruleId": "document-write", "line": 24 },
+    { "filePath": "src/scanner/ast.js", "ruleId": "document-write", "line": 202 },
+    { "filePath": "src/scanner/ast.js", "ruleId": "child-process", "line": 299 },
+    { "filePath": "src/scanner/richDataBase.js", "ruleId": "sql-assign-concat", "line": 15 },
+    { "filePath": "src/scanner/richDataBase.js", "ruleId": "innerhtml", "line": 25 },
+    { "filePath": "src/scanner/ruleRichData.js", "ruleId": "hardcoded-secret", "line": 32 },
+    { "filePath": "src/scanner/ruleRichData.js", "ruleId": "eval", "line": 22 },
+    { "filePath": "src/scanner/ruleRichData.js", "ruleId": "child-process", "line": 16 },
+    { "filePath": "src/scanner/ruleRichData.js", "ruleId": "md5", "line": 42 }
+  ]
+}

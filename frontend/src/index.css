@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-base-950 text-slate-200 antialiased;
+  }
+  ::selection {
+    @apply bg-slate-600/50;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-borderline bg-base-900;
+  }
+  .card-pad {
+    @apply p-5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-sky-600 text-white hover:bg-sky-500;
+  }
+  .btn-secondary {
+    @apply btn border border-borderline bg-base-800 text-slate-200 hover:bg-base-700;
+  }
+  .btn-danger {
+    @apply btn bg-red-600/90 text-white hover:bg-red-600;
+  }
+  .btn-ghost {
+    @apply btn text-slate-400 hover:bg-base-800 hover:text-slate-200;
+  }
+  .input {
+    @apply w-full rounded-md border border-borderline bg-base-850 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-slate-400;
+  }
+  .code-block {
+    @apply font-mono text-[13px] leading-relaxed;
+  }
+}
+
+/* Custom scrollbar for code areas */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #263141;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #314155;
+}
