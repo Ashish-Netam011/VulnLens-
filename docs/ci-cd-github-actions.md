@@ -12,7 +12,7 @@ pipeline as the CLI and the API. It requires **no secrets**, **no MongoDB**, and
 ## Workflow file
 
 - **Path:** `.github/workflows/vulnlens.yml`
-- **Job:** `security-scan` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `VulnLens Security Gate`
+- **Job:** `security-scan` → `VulnLens Security Gate`
 - **Runner:** `ubuntu-latest`
 - **Node:** 20 (via `actions/setup-node@v4`, with npm cache)
 - **Working directory:** `backend`
@@ -43,23 +43,25 @@ pipeline as the CLI and the API. It requires **no secrets**, **no MongoDB**, and
 ## Timeline / ordering guarantee
 
 ```
-scan step ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬exit-code captured (never aborts)ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶ upload SARIF (always)
-                                                     ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Å¡
-                                   enforce gate (always) ÃƒÂ¢Ã¢â‚¬â€Ã¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ exit $VULNLENS_EXIT
+scan step -----------------------> exit-code captured (never aborts)
+                                              |
+                    +--> upload SARIF (always)
+                    |
+                    +--> enforce gate (always) ----> exit $VULNLENS_EXIT
 ```
 
 Because SARIF is written before the exit code is derived, **a failing security
-gate still produces a Code Scanning alert** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the upload step and the gate are
+gate still produces a Code Scanning alert** — the upload step and the gate are
 independent steps and both run on `always()`.
 
 ## Exit-code contract
 
 | Code | Meaning | Result |
 |---|---|---|
-| `0` | PASS ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no NEW (non-baselined) findings at/above the threshold | Job green |
-| `1` | SECURITY GATE FAILED ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â NEW finding(s) at/above `--fail-on` | Job red |
-| `2` | WORKFLOW ERROR ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â CLI usage/configuration error | Job red |
-| `3` | SCANNER ERROR ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â scanner/runtime error | Job red |
+| `0` | PASS — no NEW (non-baselined) findings at/above the threshold | Job green |
+| `1` | SECURITY GATE FAILED — NEW finding(s) at/above `--fail-on` | Job red |
+| `2` | WORKFLOW ERROR — CLI usage/configuration error | Job red |
+| `3` | SCANNER ERROR — scanner/runtime error | Job red |
 
 Exit `2`/`3` are **never** converted into success. The gate step simply re-exits
 with the captured code, so the failure is visible and actionable.
@@ -96,7 +98,7 @@ permissions:
   security-events: write  # upload-sarif writes Code Scanning alerts
 ```
 
-- Uses `pull_request` (not `pull_request_target`), so it is **fork-safe** ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it
+- Uses `pull_request` (not `pull_request_target`), so it is **fork-safe** — it
   never runs with the base-repo token on untrusted PR code.
 - No `issues`, `pull-requests`, or other write scopes.
 - No `${{ secrets.* }}` references anywhere.
@@ -165,8 +167,7 @@ To add another first-party directory later (e.g. `frontend/src`), either:
 - Add a second scan step writing to a separate SARIF file and upload it, or
 - Introduce a proper include/exclude list and widen the target to `..`.
 
-Keep the "write SARIF before deriving exit code" and "capture ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ capture ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
-enforce" patterns so alerting stays decoupled from the gate.
+Keep the "write SARIF before deriving exit code" and "capture → enforce" patterns so alerting stays decoupled from the gate.
 
 ## Testing the gate locally (no hosted runner)
 
@@ -191,6 +192,7 @@ node backend/bin/vulnlens.js scan <dir-with-new-high> --format sarif \
   --output /tmp/v.sarif --baseline vulnlens.baseline.json \
   --fail-on high ; echo "exit=$?"   # 1
 ls -l /tmp/v.sarif   # exists despite exit 1
+```
 
 ## Phase 6E — CI & baseline integrity hardening
 

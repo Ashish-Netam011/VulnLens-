@@ -3,6 +3,29 @@
 All notable changes to **VulnLens** are documented here, grouped by phase. The
 project uses a phase-based roadmap (see `README.md` → Phase roadmap).
 
+## GitHub release readiness (2026-09-08)
+
+Documentation and presentation pass only — **no scanner, data-flow, AI-core,
+baseline, SARIF, CI-gate, or test logic changed**.
+
+- **`README.md` rewritten** for a public/GitHub audience: value proposition,
+  problem/solution, key features, AI-integration contract (“the scanner
+  decides, AI explains”), architecture, security design, tech stack,
+  repository layout, setup + CLI + environment-variable docs, development
+  & testing commands, demo workflow (Scan → Finding → Source Context → Data
+  Flow → AI Copilot → Remediation), CI gate summary, doc index, limitations,
+  project context, AI-tools disclosure, and license. The rewrite also removed
+  mojibake/double-encoded characters that previously rendered as garbage on
+  GitHub and replaced stale claims (e.g. outdated test counts).
+- **`docs/ci-cd-github-actions.md`** — repaired double-encoded characters
+  (multiple mojibake generations, incl. stray control bytes) and fixed an
+  unclosed code fence that was swallowing the Phase 6E section; content and
+  terminology preserved.
+- **`LICENSE`** (new) — MIT, Copyright (c) 2026 Ashish Netam; README now links
+  it.
+- **CI badge** — README shows the `vulnlens.yml` GitHub Actions workflow-status
+  badge for the public repo home.
+
 ## UI/UX Redesign — Security Investigation Cockpit (2026-09-06)
 
 Complete frontend redesign around the product story **detect the risk → trace
