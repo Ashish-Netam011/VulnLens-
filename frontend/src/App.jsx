@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { PageLoader } from './components/ui/Spinner.jsx';
 import LoginPage from './pages/LoginPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
 import OverviewPage from './pages/OverviewPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ProjectDetailPage from './pages/ProjectDetailPage.jsx';
@@ -40,7 +39,6 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<AuthGate><LoginPage /></AuthGate>} />
-      <Route path="/register" element={<AuthGate><RegisterPage /></AuthGate>} />
 
       <Route path="/" element={<Protected><OverviewPage /></Protected>} />
       <Route path="/projects" element={<Protected><ProjectsPage /></Protected>} />

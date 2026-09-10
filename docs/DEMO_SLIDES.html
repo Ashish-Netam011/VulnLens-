@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, initial-scale=1.0" />
+  <title>VulnLens AI — Demo Slides</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #0f0f14;
+      color: #e8e8ed;
+      overflow: hidden;
+      width: 1920px;
+      height: 1080px;
+    }
+
+    .slide {
+      display: none;
+      width: 1920px;
+      height: 1080px;
+      padding: 80px 120px;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slide.active { display: flex; }
+
+    /* ── Slide 1: Title ─────────────────────────── */
+    .slide-1 {
+      align-items: center;
+      text-align: center;
+      background: radial-gradient(ellipse at 50% 40%, #1a1a2e 0%, #0f0f14 70%);
+    }
+    .slide-1 .logo {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #818cf8;
+      margin-bottom: 12px;
+    }
+    .slide-1 h1 {
+      font-size: 96px;
+      font-weight: 900;
+      line-height: 1.05;
+      background: linear-gradient(135deg, #e8e8ed 30%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 32px;
+    }
+    .slide-1 .tagline {
+      font-size: 32px;
+      font-weight: 400;
+      color: #9ca3af;
+      max-width: 900px;
+      line-height: 1.4;
+    }
+    .slide-1 .tagline strong {
+      color: #c4b5fd;
+      font-weight: 600;
+    }
+    .slide-1 .hackathon {
+      margin-top: 60px;
+      font-size: 18px;
+      color: #6b7280;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ── Slide 2: Problem ───────────────────────── */
+    .slide-2 {
+      gap: 48px;
+    }
+    .slide-2 .label {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f87171;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .slide-2 h2 {
+      font-size: 64px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+    .slide-2 .columns {
+      display: flex;
+      gap: 40px;
+    }
+    .slide-2 .col {
+      flex: 1;
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 16px;
+      padding: 40px;
+    }
+    .slide-2 .col.bad { border-color: #991b1b; }
+    .slide-2 .col.bad .col-icon { color: #f87171; }
+    .slide-2 .col-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .slide-2 .col h3 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .slide-2 .col p {
+      font-size: 20px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+
+    /* ── Slide 3: Architecture ──────────────────── */
+    .slide-3 {
+      gap: 32px;
+      align-items: center;
+      text-align: center;
+    }
+    .slide-3 .label {
+      font-size: 16px;
+      font-weight: 700;
+      color: #818cf8;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .slide-3 h2 {
+      font-size: 56px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+    .slide-3 .arch {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-top: 20px;
+    }
+    .slide-3 .box {
+      background: #1a1a24;
+      border: 2px solid #2a2a3a;
+      border-radius: 16px;
+      padding: 32px 36px;
+      text-align: center;
+      min-width: 220px;
+    }
+    .slide-3 .box.highlight {
+      border-color: #818cf8;
+      background: #1e1b4b;
+    }
+    .slide-3 .box .icon { font-size: 36px; margin-bottom: 8px; }
+    .slide-3 .box h4 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .slide-3 .box p {
+      font-size: 15px;
+      color: #9ca3af;
+    }
+    .slide-3 .arrow {
+      font-size: 36px;
+      color: #4b5563;
+    }
+    .slide-3 .footer-note {
+      margin-top: 36px;
+      font-size: 22px;
+      color: #9ca3af;
+      max-width: 1000px;
+      line-height: 1.5;
+    }
+    .slide-3 .footer-note strong {
+      color: #c4b5fd;
+    }
+
+    /* ── Slide 4: Features ──────────────────────── */
+    .slide-4 {
+      gap: 32px;
+    }
+    .slide-4 .label {
+      font-size: 16px;
+      font-weight: 700;
+      color: #34d399;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .slide-4 h2 {
+      font-size: 56px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+    .slide-4 .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 12px;
+    }
+    .slide-4 .card {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .slide-4 .card .icon { font-size: 28px; margin-bottom: 10px; }
+    .slide-4 .card h4 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .slide-4 .card p {
+      font-size: 15px;
+      color: #9ca3af;
+      line-height: 1.4;
+    }
+
+    /* ── Slide 5: Closing ───────────────────────── */
+    .slide-5 {
+      align-items: center;
+      text-align: center;
+      background: radial-gradient(ellipse at 50% 40%, #1a1a2e 0%, #0f0f14 70%);
+    }
+    .slide-5 .logo {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #818cf8;
+      margin-bottom: 16px;
+    }
+    .slide-5 h2 {
+      font-size: 72px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #e8e8ed 30%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 48px;
+    }
+    .slide-5 .stats {
+      display: flex;
+      gap: 60px;
+      margin-bottom: 56px;
+    }
+    .slide-5 .stat {
+      text-align: center;
+    }
+    .slide-5 .stat .num {
+      font-size: 56px;
+      font-weight: 900;
+      color: #818cf8;
+    }
+    .slide-5 .stat .lbl {
+      font-size: 16px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+    .slide-5 .closing {
+      font-size: 24px;
+      color: #9ca3af;
+      margin-top: 16px;
+    }
+    .slide-5 .closing strong {
+      color: #c4b5fd;
+      font-weight: 700;
+    }
+    .slide-5 .links {
+      margin-top: 36px;
+      font-size: 18px;
+      color: #6b7280;
+    }
+    .slide-5 .links a {
+      color: #818cf8;
+      text-decoration: none;
+    }
+
+    /* ── Keyboard nav ───────────────────────────── */
+    .nav {
+      position: fixed;
+      bottom: 30px;
+      right: 40px;
+      display: flex;
+      gap: 12px;
+      z-index: 100;
+    }
+    .nav button {
+      background: #2a2a3a;
+      border: 1px solid #3a3a4a;
+      color: #e8e8ed;
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .nav button:hover { background: #3a3a4a; }
+    .nav .counter {
+      display: flex;
+      align-items: center;
+      color: #6b7280;
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Slide 1: Title -->
+  <div class="slide slide-1 active" id="slide-1">
+    <div class="logo">VulnLens</div>
+    <h1>VulnLens AI</h1>
+    <p class="tagline">
+      A security scanner that <strong>decides</strong>.<br/>
+      An AI that <strong>explains</strong>.
+    </p>
+    <p class="hackathon">Hackathon 2026</p>
+  </div>
+
+  <!-- Slide 2: Problem -->
+  <div class="slide slide-2" id="slide-2">
+    <span class="label">The Problem</span>
+    <h2>Security scanners<br/>you can't trust.</h2>
+    <div class="columns">
+      <div class="col bad">
+        <div class="col-icon">🧩</div>
+        <h3>Rule-Based Scanners</h3>
+        <p>Deterministic but noisy. They tell you <em>what</em> went wrong — but not how to fix it. Developers ignore the output.</p>
+      </div>
+      <div class="col bad">
+        <div class="col-icon">🤖</div>
+        <h3>AI-Only Scanners</h3>
+        <p>Sounds impressive, but hallucinates findings. Non-deterministic results that you can't trust as a CI gate. Dangerous.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 3: Architecture -->
+  <div class="slide slide-3" id="slide-3">
+    <span class="label">The Solution</span>
+    <h2>The scanner decides.<br/>AI explains.</h2>
+    <div class="arch">
+      <div class="box highlight">
+        <div class="icon">🔍</div>
+        <h4>Deterministic Scanner</h4>
+        <p>8 rule families, evidence,<br/>confidence, verdict, score</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="box">
+        <div class="icon">📊</div>
+        <h4>Findings</h4>
+        <p>Severity, path, line,<br/>evidence, attack path</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="box highlight">
+        <div class="icon">🤖</div>
+        <h4>AI Copilot</h4>
+        <p>Explains, advises,<br/>suggests fixes — never decides</p>
+      </div>
+    </div>
+    <p class="footer-note">
+      <strong>No LLM is ever consulted to decide if something is a vulnerability.</strong><br/>
+      Same code → same machine → identical results. Every time.
+    </p>
+  </div>
+
+  <!-- Slide 4: Key Features -->
+  <div class="slide slide-4" id="slide-4">
+    <span class="label">Key Features</span>
+    <h2>What VulnLens ships today.</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="icon">🔍</div>
+        <h4>8 Vulnerability Families</h4>
+        <p>SQL injection, XSS, hardcoded secrets, weak crypto, dangerous functions, misconfig, sensitive data, file handling.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🔀</div>
+        <h4>Data Flow Analysis</h4>
+        <p>Source-to-sink taint tracing. Shows the exact attack path an exploiter would use.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🤖</div>
+        <h4>AI Copilot</h4>
+        <p>Per-finding explanations, impact analysis, and secure code fixes. Advisory only — never decides.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🔄</div>
+        <h4>Rescan Verification</h4>
+        <p>Stable comparison keys classify findings as resolved, remaining, or new after fixes.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🚨</div>
+        <h4>CI Security Gate</h4>
+        <p>Baseline-aware regression. New HIGH findings fail CI. Baselined findings stay visible.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📋</div>
+        <h4>SARIF 2.1.0 Export</h4>
+        <p>Standard format for GitHub Code Scanning and any SARIF-compatible tooling.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Closing -->
+  <div class="slide slide-5" id="slide-5">
+    <div class="logo">VulnLens</div>
+    <h2>The scanner decides.<br/>AI explains.</h2>
+    <div class="stats">
+      <div class="stat">
+        <div class="num">616</div>
+        <div class="lbl">Tests Passing</div>
+      </div>
+      <div class="stat">
+        <div class="num">8</div>
+        <div class="lbl">Rule Families</div>
+      </div>
+      <div class="stat">
+        <div class="num">100%</div>
+        <div class="lbl">Deterministic</div>
+      </div>
+      <div class="stat">
+        <div class="num">0</div>
+        <div class="lbl">Hallucinated Findings</div>
+      </div>
+    </div>
+    <p class="closing">
+      <strong>Detect → Trace → Understand → Fix</strong>
+    </p>
+    <p class="links">
+      github.com/Ashish-Netam011/VulnLens
+    </p>
+  </div>
+
+  <!-- Navigation -->
+  <div class="nav">
+    <button onclick="prev()">← Prev</button>
+    <span class="counter"><span id="num">1</span> / 5</span>
+    <button onclick="next()">Next →</button>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    let current = 0;
+
+    function show(i) {
+      slides[current].classList.remove('active');
+      current = (i + slides.length) % slides.length;
+      slides[current].classList.add('active');
+      document.getElementById('num').textContent = current + 1;
+    }
+    function next() { show(current + 1); }
+    function prev() { show(current - 1); }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    });
+  </script>
+</body>
+</html>

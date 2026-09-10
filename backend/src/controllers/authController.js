@@ -56,3 +56,22 @@ export async function login(req, res, next) {
 export async function me(req, res) {
   return res.json({ user: req.user.toSafeJSON() });
 }
+
+/**
+ * Demo login — finds or creates a single shared demo user.
+ * No credentials required; intended for hackathon demos only.
+ */
+export async function demo(req, res, next) {
+  try {
+    const demoEmail = 'demo@vulnlens.local';
+    let user = await User.findOne({ email: demoEmail });
+    if (!user) {
+      const passwordHash = await bcrypt.hash('demo-not-real', 12);
+      user = await User.create({ email: demoEmail, passwordHash, name: 'Demo User' });
+    }
+    const token = signToken(user);
+    return res.json({ token, user: user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+}

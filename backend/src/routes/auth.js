@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, me } from '../controllers/authController.js';
+import { register, login, me, demo } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { registerSchema, loginSchema } from '../utils/validation.js';
@@ -12,5 +12,6 @@ const authLimiter = createAuthRateLimiter();
 router.post('/register', authLimiter, validate(registerSchema), register);
 router.post('/login', authLimiter, validate(loginSchema), login);
 router.get('/me', protect, me);
+router.post('/demo', demo);
 
 export default router;
