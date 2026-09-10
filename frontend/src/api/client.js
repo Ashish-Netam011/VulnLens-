@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// In production (Vercel), the backend runs on a separate host (Render).
+// VITE_API_URL must be set in Vercel environment variables.
+// In development, Vite proxies /api to the backend via vite.config.js.
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 });
 
 // Attach JWT to every request. Token is stored in localStorage (a common

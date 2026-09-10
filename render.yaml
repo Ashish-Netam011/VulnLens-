@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: vulnlens-backend
+    env: node
+    buildCommand: cd backend && npm ci --omit=dev
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: AI_PROVIDER
+        value: none
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      - key: AUTH_RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: AUTH_RATE_LIMIT_MAX
+        value: 10
+      - key: MAX_FILE_SIZE_BYTES
+        value: 2097152
+      - key: CORS_ORIGIN
+        sync: false
+      - key: OSV_API_URL
+        value: https://api.osv.dev/v1/querybatch
+      - key: CVE_LOOKUP_TIMEOUT_MS
+        value: 12000
+      - key: CVE_LOOKUP_CACHE_TTL_MS
+        value: 21600000
