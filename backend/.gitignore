@@ -1,14 +1,25 @@
-node_modules/
-dist/
+# Local environment and secrets — never commit real values.
 .env
-*.log
+.env.local
+.env.*.local
+
+# OS / editor junk.
 .DS_Store
-coverage/
-.vite/
+Thumbs.db
+*.swp
+*~
 
-# Captured test-run output (generated artifact)
-security_test_output.txt
+# IDE.
+.idea
+.vscode
+*.tsbuildinfo
 
-# Captured test-run output (generated artifacts)
-testout.txt
-testresults.txt
+# Node.
+node_modules
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test databases / temp dumps.
+*.dump

@@ -1,12 +1,47 @@
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
 
-// Preserve any NODE_ENV that was set before dotenv loaded (e.g. NODE_ENV=test
-// in the test script) so the server doesn't auto-start when imported by tests.
-const _preDotenvNodeEnv = process.env.NODE_ENV;
-dotenv.config({ override: true });
-if (_preDotenvNodeEnv !== undefined) {
-  process.env.NODE_ENV = _preDotenvNodeEnv;
+// Preserve pre-existing env vars that were set by the platform (Render, CI, etc.)
+// before dotenv loads. dotenv must NEVER override a variable the platform already
+// provided — those are the authoritative production values (PORT, MONGODB_URI,
+// JWT_SECRET, etc.). We only let .env fill in missing values for local development.
+//
+// We snapshot every platform-provided var before dotenv runs, load .env without
+// overriding, then restore the platform values so .env cannot clobber them.
+const _platformVars = new Set([
+  'NODE_ENV',
+  'PORT',
+  'MONGODB_URI',
+  'JWT_SECRET',
+  'JWT_EXPIRES_IN',
+  'CORS_ORIGIN',
+  'AI_PROVIDER',
+  'RATE_LIMIT_WINDOW_MS',
+  'RATE_LIMIT_MAX_REQUESTS',
+  'AUTH_RATE_LIMIT_WINDOW_MS',
+  'AUTH_RATE_LIMIT_MAX',
+  'MAX_FILE_SIZE_BYTES',
+  'OSV_API_URL',
+  'CVE_LOOKUP_TIMEOUT_MS',
+  'CVE_LOOKUP_CACHE_TTL_MS',
+  'OPENROUTER_API_KEY',
+  'OPENROUTER_MODEL',
+  'OLLAMA_BASE_URL',
+  'OLLAMA_MODEL',
+  'AI_TIMEOUT_MS',
+  'AI_MAX_RETRIES',
+]);
+const _preDotenv = {};
+for (const k of _platformVars) {
+  if (process.env[k] !== undefined) _preDotenv[k] = process.env[k];
+}
+
+// Only load .env for missing values (local dev). Never override platform values.
+dotenv.config();
+
+// Restore any platform-provided values that .env may have overwritten (safety net).
+for (const [k, v] of Object.entries(_preDotenv)) {
+  process.env[k] = v;
 }
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -45,9 +80,9 @@ const env = {
   OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
   OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'codellama',
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
-  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '5000', 10),
+  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   AUTH_RATE_LIMIT_WINDOW_MS: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || '900000', 10),
-  AUTH_RATE_LIMIT_MAX: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '500', 10),
+  AUTH_RATE_LIMIT_MAX: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '10', 10),
   MAX_FILE_SIZE_BYTES: parseInt(process.env.MAX_FILE_SIZE_BYTES || '2097152', 10),
   CORS_ORIGIN: process.env.CORS_ORIGIN || '',
 
